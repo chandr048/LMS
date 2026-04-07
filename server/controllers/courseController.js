@@ -1,5 +1,6 @@
-import { User } from "@clerk/express";
+import User from "../models/user.js";
 import Course from "../models/Course.js";
+
 
 
 //Get all courses

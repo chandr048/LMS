@@ -1,10 +1,10 @@
 import { Webhook } from "svix";
 import User from "../models/user.js";
-import { response } from "express";
+import Stripe from "stripe";
 import Purchase from "../models/Purchase.js";
 import Course from "../models/Course.js";
 
-//API controller fun to manage clerk user with database
+// API controller fun to manage clerk user with database
 
 export const clerkWebhook = async (req, res) => {
     try{
@@ -70,9 +70,9 @@ export const stripeWebhooks = async (req, res) => {
     let event;
 
     try {
-        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        event = stripeInstance.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
     } catch (err) {
-        response.status(400).send(`Webhook Error: ${err.message}`);
+        res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
     //Handle the event
