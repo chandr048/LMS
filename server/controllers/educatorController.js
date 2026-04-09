@@ -1,14 +1,14 @@
-import { clerkClient, getAuth } from "@clerk/express";
+import { clerkClient } from "@clerk/express";
 import Course from "../models/Course.js";
 import { v2 as cloudinary } from "cloudinary";
 import Purchase from "../models/Purchase.js";
 import User from "../models/user.js";
 
+
 // update role to educator
 export const updateRoleToEducator = async (req,res) => {
     try{
-        const auth = getAuth(req);
-        const userId = req.auth.userId;
+        const userId = typeof req.auth === 'function' ? req.auth().userId : req.auth?.userId;
 
         if (!userId) {
             return res.status(401).json({ success: false, message: 'Authentication required.' });
@@ -28,34 +28,37 @@ export const updateRoleToEducator = async (req,res) => {
 }
 
 //Add new course
-export const addCourse = async (req,res) => {
+export const addCourse = async (req, res) => {
     try {
-         const {courseData} = req.body;
-         const imageFile = req.file;
-         const educatorId = req.auth.userId;
+        const { courseData } = req.body;
+        const imageFile = req.file;
+        const educatorId = req.auth.userId;
 
-         if(!imageFile) {
-            return res.status(400).json({success: false, message: 'Course thumbnail is not attached'});
-         }
+        // Better Security: Check Clerk metadata for role
+        const user = await clerkClient.users.getUser(educatorId);
+        if (user.publicMetadata.role !== 'educator') {
+            return res.status(403).json({ success: false, message: 'Unauthorized. Educator role required.' });
+        }
 
-         if(!educatorId) {
-            return res.status(401).json({success: false, message: 'Authentication required. Please log in as an educator.'});
-         }
+        if (!imageFile) {
+            return res.status(400).json({ success: false, message: 'Course thumbnail is required' });
+        }
 
-          const parsedCourseData = await JSON.parse(courseData)
-          parsedCourseData.educator = educatorId;
-          const newCourse = await Course.create(parsedCourseData);
-          const imageUpload = await cloudinary.uploader.upload(imageFile.path)
-          newCourse.courseThumbnail = imageUpload.secure_url;
-          await newCourse.save();
+        // Standard parsing (remove await)
+        const parsedCourseData = JSON.parse(courseData);
+        parsedCourseData.educator = educatorId;
 
-          res.json({success: true, message: 'Course added successfully'});
+        // Upload to Cloudinary
+        const imageUpload = await cloudinary.uploader.upload(imageFile.path);
+        parsedCourseData.courseThumbnail = imageUpload.secure_url;
 
-    } catch(error) {
-         res.status(400).json({success: false, message: error.message});
+        const newCourse = await Course.create(parsedCourseData);
+
+        res.json({ success: true, message: 'Course added successfully', course: newCourse });
+    } catch (error) {
+        res.status(400).json({ success: false, message: error.message });
     }
 }
-
 //Get educator courses
 export const getEducatorCourses = async (req,res) => {
     try{
@@ -114,26 +117,36 @@ export const educatorDashboardData = async (req,res) => {
 }
 
 // Get enrolled Students Data with purchase Data
-export const getEnrolledStudentsData = async (req,res) => {
-    try{
+// Get enrolled Students Data with purchase Data
+export const getEnrolledStudentsData = async (req, res) => {
+    try {
         const educator = req.auth.userId;
-        const courses = await Course.find({educator});
+
+        // 1. Fetch courses to get the IDs
+        const courses = await Course.find({ educator });
         const courseIds = courses.map(course => course._id);
 
+        // 2. Fix: Populate 'title' (assuming your Model uses 'title' and not 'courseTitle')
+        // Also added .lean() for better performance during mapping
         const purchases = await Purchase.find({
             courseId: { $in: courseIds },
             status: 'completed'
-         }).populate('userId', 'name imageUrl').populate('courseId', 'courseTitle'); // Populate user and course details
+        })
+        .populate('userId', 'name imageUrl')
+        .populate('courseId', 'title'); 
 
-         const enrolledStudents = purchases.map(purchase => ({
-            student : purchase.userId,
-            courseTitle: purchase.courseId.courseTitle,
+        // 3. Fix: Add optional chaining (?.) to prevent crashing if a record is missing
+        const enrolledStudents = purchases.map(purchase => ({
+            student: purchase.userId,
+            courseTitle: purchase.courseId?.title || "Course Deleted", 
             purchaseDate: purchase.createdAt
-         }));
+        }));
 
-         res.json({success: true, enrolledStudents});
+        res.json({ success: true, enrolledStudents });
 
     } catch (error) {
-        res.json({success: false, message: error.message});
+        // Log the actual error to your terminal so you can see the stack trace
+        console.error("Enrolled Students Error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 }

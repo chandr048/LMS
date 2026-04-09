@@ -2,19 +2,42 @@ import User from '../models/user.js';
 import Stripe from 'stripe';
 import Purchase from '../models/Purchase.js';
 import Course from '../models/Course.js';
+import { CourseProgress } from '../models/CourseProgress.js';
+import { clerkClient } from '@clerk/express';
 
 export const getUserData = async (req,res) => {
     try{
-        const userId = req.auth.userId;
-        const user = await User.findById(userId)
+        const userId = req.auth?.userId;
+        
+        if(!userId){
+            return res.status(401).json({success: false, message: 'User not authenticated'});
+        }
+        
+        let user = await User.findById(userId)
 
         if(!user){
-            return res.json({success: false, message: 'User not found'});
+            // User doesn't exist in DB, fetch from Clerk and create
+            try {
+                const clerkUser = await clerkClient.users.getUser(userId);
+                
+                const userData = {
+                    _id: clerkUser.id,
+                    email: clerkUser.emailAddresses[0].emailAddress,
+                    name: (clerkUser.firstName || '') + " " + (clerkUser.lastName || ''),
+                    imageUrl: clerkUser.imageUrl,
+                }
+                
+                user = await User.create(userData);
+            } catch (clerkError) {
+                console.error("Clerk error:", clerkError);
+                return res.status(400).json({success: false, message: 'Failed to sync user from Clerk'});
+            }
         }
 
         res.json({success: true, user});
     } catch (error){
-        res.json({success: false, message: 'Error fetching user data'});
+        console.error("getUserData error:", error);
+        res.status(500).json({success: false, message: error.message || 'Error fetching user data'});
     }
 }
 
