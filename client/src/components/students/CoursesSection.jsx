@@ -1,3 +1,4 @@
+import React from 'react'
 import {Link} from 'react-router-dom'
 import { AppContext} from '../../context/AppContext.jsx'
 import CourseCard from './CourseCard.jsx'
