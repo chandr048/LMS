@@ -7,75 +7,77 @@ import educatorRouter from "./routes/educatorRoutes.js";
 import connectCloudinary from "./configs/cloudinary.js";
 import courseRouter from "./routes/courseRoute.js";
 import userRouter from "./routes/userRoutes.js";
-import jwt from 'jsonwebtoken';
+import jwt from "jsonwebtoken";
 
-// Initialize express app
 const app = express();
 
-// Custom auth middleware to extract Bearer token
+// ✅ Connect DB & Cloudinary ONCE
+let isConnected = false;
+const connectServices = async () => {
+  if (!isConnected) {
+    await connectDB();
+    await connectCloudinary();
+    isConnected = true;
+    console.log("DB & Cloudinary Connected");
+  }
+};
+
+// ✅ Custom Auth Middleware
 const customAuthMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     try {
-      // Decode the JWT token
       const decoded = jwt.decode(token, { complete: true });
-      if (decoded && decoded.payload && decoded.payload.sub) {
+      if (decoded?.payload?.sub) {
         req.auth = { userId: decoded.payload.sub };
       }
     } catch (error) {
-      console.error('Token decode failed:', error.message);
+      console.error("Token decode failed:", error.message);
     }
   }
   next();
 };
 
-// Middleware
-
+// ✅ Middlewares
 app.use(cors({
-  origin: "*", // or your frontend URL
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
 }));
 app.use(express.json());
 app.use(customAuthMiddleware);
 
-// Logging middleware
+// ✅ Logger
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
-  if (req.auth) {
-    console.log('Auth UserId:', req.auth.userId);
-  } else {
-    console.log('Auth: No token provided (public route)');
-  }
   next();
 });
 
-// Global error handler (add this!)
-app.use((err, req, res, next) => {
-  console.error('Server Error:', err.stack);
-  res.status(500).json({ error: 'Internal Server Error', message: err.message });
+// ✅ Routes
+app.get("/", async (req, res) => {
+  await connectServices();
+  res.send("API Working");
 });
 
-// Routes
-app.get("/", (req, res) => res.send("API Working"));
 app.post("/clerk", express.json(), clerkWebhook);
-app.use('/api/educator', educatorRouter);
-app.use('/api/course', courseRouter);
-app.use('/api/user', userRouter);
-app.post('/stripe', express.raw({type: 'application/json'}), stripeWebhooks);
 
-// Port
-const PORT = process.env.PORT || 5000;
+app.use("/api/educator", async (req, res, next) => {
+  await connectServices();
+  next();
+}, educatorRouter);
 
-app.listen(PORT, async () => {
-  try {
-    await connectDB();
-    await connectCloudinary();
-    console.log(`Server running on port ${PORT}`);
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-});
+app.use("/api/course", async (req, res, next) => {
+  await connectServices();
+  next();
+}, courseRouter);
+
+app.use("/api/user", async (req, res, next) => {
+  await connectServices();
+  next();
+}, userRouter);
+
+app.post("/stripe", express.raw({ type: "application/json" }), stripeWebhooks);
+
+// ✅ Export for Vercel (IMPORTANT)
+export default app;
