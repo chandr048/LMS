@@ -79,6 +79,7 @@ const AddCourse = () => {
         if (chapter.chapterId === currentChapterId) {
           const newLecture = {
             ...lectureDetails,
+            lectureDuration: Number(lectureDetails.lectureDuration),
             lectureOrder: chapter.chapterContent.length > 0 ? chapter.
             chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
             lectureId: uniqid(),

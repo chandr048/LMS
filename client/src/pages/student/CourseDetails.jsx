@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/Loading'
 import { assets } from '../../assets/assets'
@@ -12,11 +12,13 @@ import axios from 'axios'
 function CourseDetails() {
 
   const { id } = useParams()
+  const navigate = useNavigate()
 
   const [courseData, setCourseData] = useState(null)
   const [openSections, setOpenSections] = useState({})
   const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false)
   const [playerData, setPlayerData] = useState(null)
+  const [invalidCourseId, setInvalidCourseId] = useState(false)
 
   const {
     calculateRating,
@@ -30,18 +32,38 @@ function CourseDetails() {
   } = useContext(AppContext)
 
   const fetchCourseData = async () => {
+    const invalidId = !id || id === 'undefined' || id === 'null' || id.trim() === '';
+    console.debug('[CourseDetails] id=', id, 'backendUrl=', backendUrl, 'invalidId=', invalidId)
+
+    if (invalidId) {
+      setInvalidCourseId(true)
+      toast.error('Invalid course ID')
+      return
+    }
+
     try {
       const { data } = await axios.get(`${backendUrl}/api/course/${id}`)
 
       if (data.success) {
         setCourseData(data.course)
       } else {
+        setInvalidCourseId(true)
         toast.error(data.message)
       }
     } catch (error) {
-      toast.error('Failed to fetch course data')
+      setInvalidCourseId(true)
+      toast.error(error.response?.data?.message || 'Failed to fetch course data')
     }
   }
+
+  useEffect(() => {
+    if (invalidCourseId) {
+      const timeout = setTimeout(() => {
+        navigate('/course-list')
+      }, 1200)
+      return () => clearTimeout(timeout)
+    }
+  }, [invalidCourseId, navigate])
 
   const enrollCourse = async () => {
     try {
@@ -57,7 +79,7 @@ function CourseDetails() {
       )
 
       if (data.success) {
-        window.location.replace(data.session_url)
+        window.location.replace(data.url || data.session_url)
       } else {
         toast.error(data.message)
       }
@@ -83,6 +105,14 @@ function CourseDetails() {
       ...prev,
       [index]: !prev[index],
     }))
+  }
+
+  if (invalidCourseId) {
+    return (
+      <div className='pt-20 text-center text-red-600'>
+        Invalid course ID. Please check the course link or return to the course list.
+      </div>
+    )
   }
 
   return courseData ? (

@@ -12,12 +12,7 @@ export const AppContext = createContext();
 
 export const AppContextProvider = (props) => {
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
-    axios.get(`${backendUrl}/api/user/data`)
-    axios.get(`${backendUrl}/api/user/enrolled-courses`)
-    axios.get(`${backendUrl}/api/educator/dashboard`)
-
-
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
     const currency = import.meta.env.VITE_CURRENCY
     const navigate = useNavigate()
 
